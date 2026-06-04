@@ -23,11 +23,27 @@ struct {
 } conntrack_map SEC(".maps");
 
 struct {
+    __uint(type, BPF_MAP_TYPE_LPM_TRIE);
+    __uint(max_entries, 1024);
+    __type(key, struct lpm_key);
+    __type(value, struct rule_mask);
+    __uint(map_flags, BPF_F_NO_PREALLOC);
+} src_ip_trie SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LPM_TRIE);
+    __uint(max_entries, 1024);
+    __type(key, struct lpm_key);
+    __type(value, struct rule_mask);
+    __uint(map_flags, BPF_F_NO_PREALLOC);
+} dst_ip_trie SEC(".maps");
+
+struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 256);
     __type(key, __u32);
     __type(value, struct bpf_rule);
-} rules_map SEC(".maps");
+} rules_details_map SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
@@ -35,6 +51,11 @@ struct {
     __type(key, __u32);
     __type(value, __u32);
 } config_map SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 256 * 1024);
+} events_ringbuf SEC(".maps");
 
 SEC("tc")
 int lfw_tc_filter(struct __sk_buff *skb)
@@ -124,51 +145,71 @@ int lfw_tc_filter(struct __sk_buff *skb)
     }
 
     // Rules evaluation
-    __u32 config_idx_cnt = 1;
-    __u32 *p_rule_count = bpf_map_lookup_elem(&config_map, &config_idx_cnt);
-    __u32 rule_count = p_rule_count ? *p_rule_count : 0;
+    struct lpm_key src_key = {
+        .prefixlen = 32,
+        .ip = src_ip
+    };
+    struct rule_mask *src_mask = bpf_map_lookup_elem(&src_ip_trie, &src_key);
+
+    struct lpm_key dst_key = {
+        .prefixlen = 32,
+        .ip = dst_ip
+    };
+    struct rule_mask *dst_mask = bpf_map_lookup_elem(&dst_ip_trie, &dst_key);
+
+    struct rule_mask intersected = {};
+    if (src_mask && dst_mask) {
+        #pragma unroll
+        for (int i = 0; i < 4; i++) {
+            intersected.bits[i] = src_mask->bits[i] & dst_mask->bits[i];
+        }
+    }
 
     __u8 decision_action = 0; // 0: undecided, 1: accept, 2: drop
     struct bpf_rule *matched_rule = NULL;
 
-    #pragma clang loop unroll(disable)
-    for (__u32 i = 0; i < 256; i++) {
-        if (i >= rule_count)
+    #pragma unroll
+    for (int i = 0; i < 4; i++) {
+        __u64 mask_val = intersected.bits[i];
+
+        for (int j = 0; j < 64; j++) {
+            if (mask_val == 0)
+                break;
+
+            int bit_idx = __builtin_ctzll(mask_val);
+            __u32 rule_idx = i * 64 + bit_idx;
+
+            struct bpf_rule *rule = bpf_map_lookup_elem(&rules_details_map, &rule_idx);
+            if (rule) {
+                if (rule->protocol == 0 || rule->protocol == lfw_proto) {
+                    __u8 port_match = 1;
+                    if (lfw_proto == 1 || lfw_proto == 2) {
+                        __u16 s_port = bpf_ntohs(src_port);
+                        __u16 d_port = bpf_ntohs(dst_port);
+
+                        if (rule->match_src_port) {
+                            if (s_port < rule->src_port_min || s_port > rule->src_port_max)
+                                port_match = 0;
+                        }
+                        if (rule->match_dst_port) {
+                            if (d_port < rule->dst_port_min || d_port > rule->dst_port_max)
+                                port_match = 0;
+                        }
+                    }
+
+                    if (port_match) {
+                        decision_action = rule->action;
+                        matched_rule = rule;
+                        break;
+                    }
+                }
+            }
+
+            mask_val &= (mask_val - 1);
+        }
+
+        if (decision_action != 0)
             break;
-
-        __u32 rule_idx = i;
-        struct bpf_rule *rule = bpf_map_lookup_elem(&rules_map, &rule_idx);
-        if (!rule)
-            break;
-
-        // Protocol check
-        if (rule->protocol != 0 && rule->protocol != lfw_proto)
-            continue;
-
-        // Source IP check
-        if (rule->match_src_ip) {
-            if ((src_ip & rule->src_mask) != (rule->src_ip & rule->src_mask))
-                continue;
-        }
-
-        // Destination IP check
-        if (rule->match_dst_ip) {
-            if ((dst_ip & rule->dst_mask) != (rule->dst_ip & rule->dst_mask))
-                continue;
-        }
-
-        // Ports check (only relevant for TCP/UDP)
-        if (lfw_proto == 1 || lfw_proto == 2) {
-            if (rule->match_src_port && rule->src_port != src_port)
-                continue;
-            if (rule->match_dst_port && rule->dst_port != dst_port)
-                continue;
-        }
-
-        // Match found
-        decision_action = rule->action;
-        matched_rule = rule;
-        break;
     }
 
     // Fallback to default action
@@ -182,6 +223,22 @@ int lfw_tc_filter(struct __sk_buff *skb)
     if (matched_rule) {
         __sync_fetch_and_add(&matched_rule->hit_count, 1);
         __sync_fetch_and_add(&matched_rule->byte_count, pkt_len);
+    }
+
+    // Submit telemetry event to Ring Buffer (slow path logs)
+    if (decision_action != 0) {
+        struct lfw_event *event = bpf_ringbuf_reserve(&events_ringbuf, sizeof(struct lfw_event), 0);
+        if (event) {
+            event->src_ip = src_ip;
+            event->dst_ip = dst_ip;
+            event->src_port = src_port;
+            event->dst_port = dst_port;
+            event->proto = lfw_proto;
+            event->action = decision_action;
+            event->pkt_len = pkt_len;
+            event->timestamp = now;
+            bpf_ringbuf_submit(event, 0);
+        }
     }
 
     // Add to conntrack if accepted and protocol is TCP/UDP

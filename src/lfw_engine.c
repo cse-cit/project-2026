@@ -127,7 +127,11 @@ static void format_rule(const lfw_rule_t *rule, char *buf, size_t buf_len)
     }
 
     if (rule->match.match_dst_port) {
-        offset += snprintf(buf + offset, buf_len - offset, " %u", ntohs(rule->match.dst_port.port));
+        if (rule->match.dst_port.min == rule->match.dst_port.max) {
+            offset += snprintf(buf + offset, buf_len - offset, " %u", rule->match.dst_port.min);
+        } else {
+            offset += snprintf(buf + offset, buf_len - offset, " %u-%u", rule->match.dst_port.min, rule->match.dst_port.max);
+        }
     }
 
     if (rule->match.match_src_ip) {

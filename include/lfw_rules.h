@@ -22,10 +22,10 @@ typedef struct {
 
     lfw_proto_t protocol;
 
-    lfw_port_t  src_port;
-    lfw_port_t  dst_port;
-    bool        match_src_port;
-    bool        match_dst_port;
+    lfw_port_range_t src_port;
+    lfw_port_range_t dst_port;
+    bool             match_src_port;
+    bool             match_dst_port;
 
 } lfw_rule_match_t;
 

@@ -1,4 +1,5 @@
 #include "lfw_rules.h"
+#include <arpa/inet.h>
 
 // Match IPv4
 static inline bool match_ip(const lfw_ipv4_t *rule_ip,
@@ -13,14 +14,15 @@ static inline bool match_ip(const lfw_ipv4_t *rule_ip,
 }
 
 // Match port
-static inline bool match_port(const lfw_port_t *rule_port,
+static inline bool match_port(const lfw_port_range_t *rule_port,
                             const lfw_port_t *pkt_port,
                             bool enabled)
 {
     if (!enabled)
         return true;
 
-    return rule_port->port == pkt_port->port;
+    lfw_u16 port = ntohs(pkt_port->port);
+    return port >= rule_port->min && port <= rule_port->max;
 }
 
 // Match protocol

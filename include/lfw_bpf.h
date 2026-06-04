@@ -20,5 +20,8 @@ void lfw_bpf_dump_stats(const lfw_rule_t *orig_rules, lfw_u32 orig_rule_count, l
 int lfw_bpf_get_conntrack_map_fd(void);
 int lfw_bpf_get_rules_map_fd(void);
 int lfw_bpf_get_config_map_fd(void);
+int lfw_bpf_get_src_ip_trie_fd(void);
+int lfw_bpf_get_dst_ip_trie_fd(void);
+int lfw_bpf_get_events_ringbuf_fd(void);
 
 #endif

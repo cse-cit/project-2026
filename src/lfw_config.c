@@ -76,15 +76,14 @@ static bool parse_ipv4_cidr(const char *text, lfw_ipv4_t *ip_out, lfw_ipv4_t *ma
 
 static bool parse_port_proto(const char *text,
                              lfw_proto_t *proto_inout,
-                             lfw_port_t *port_out,
+                             lfw_port_range_t *port_range_out,
                              bool *match_port_out)
 {
     char buf[32];
     char *slash;
     char *endptr;
-    long port;
 
-    if (!text || !proto_inout || !port_out || !match_port_out)
+    if (!text || !proto_inout || !port_range_out || !match_port_out)
         return false;
 
     if (strlen(text) >= sizeof(buf))
@@ -107,13 +106,32 @@ static bool parse_port_proto(const char *text,
             return false;
     }
 
-    port = strtol(buf, &endptr, 10);
-    if (*endptr != '\0' || port <= 0 || port > 65535)
-        return false;
+    char *dash = strchr(buf, '-');
+    if (dash) {
+        *dash = '\0';
+        char *min_str = buf;
+        char *max_str = dash + 1;
 
-    port_out->port = htons((lfw_u16)port);
+        long p_min = strtol(min_str, &endptr, 10);
+        if (*endptr != '\0' || p_min <= 0 || p_min > 65535)
+            return false;
+
+        long p_max = strtol(max_str, &endptr, 10);
+        if (*endptr != '\0' || p_max <= 0 || p_max > 65535 || p_max < p_min)
+            return false;
+
+        port_range_out->min = (lfw_u16)p_min;
+        port_range_out->max = (lfw_u16)p_max;
+    } else {
+        long port = strtol(buf, &endptr, 10);
+        if (*endptr != '\0' || port <= 0 || port > 65535)
+            return false;
+
+        port_range_out->min = (lfw_u16)port;
+        port_range_out->max = (lfw_u16)port;
+    }
+
     *match_port_out = true;
-
     return true;
 }
 

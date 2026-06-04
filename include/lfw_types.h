@@ -36,6 +36,12 @@ typedef struct {
     lfw_u16 port;
 } lfw_port_t;
 
+// Port range (host byte order)
+typedef struct {
+    lfw_u16 min;
+    lfw_u16 max;
+} lfw_port_range_t;
+
 // Packet direction
 typedef enum {
     LFW_DIR_UNKNOWN = 0,

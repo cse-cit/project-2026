@@ -7,6 +7,8 @@
 #include <time.h>
 #include <errno.h>
 #include <bpf/bpf.h>
+#include <bpf/libbpf.h>
+#include <arpa/inet.h>
 
 #include "lfw_log.h"
 #include "lfw_config.h"
@@ -29,6 +31,70 @@ static char g_config_path[256] = "/etc/lfw/lfw.rules";
 
 static pthread_t g_gc_thread;
 static bool g_gc_running = false;
+
+static pthread_t g_telemetry_thread;
+static bool g_telemetry_running = false;
+
+static int handle_event(void *ctx, void *data, size_t data_sz)
+{
+    (void)ctx;
+    if (data_sz < sizeof(struct lfw_event))
+        return 0;
+
+    struct lfw_event *event = (struct lfw_event *)data;
+
+    char src_ip_str[32];
+    char dst_ip_str[32];
+    struct in_addr src_in = { .s_addr = event->src_ip };
+    struct in_addr dst_in = { .s_addr = event->dst_ip };
+    inet_ntop(AF_INET, &src_in, src_ip_str, sizeof(src_ip_str));
+    inet_ntop(AF_INET, &dst_in, dst_ip_str, sizeof(dst_ip_str));
+
+    const char *proto = "unknown";
+    if (event->proto == 1) proto = "tcp";
+    else if (event->proto == 2) proto = "udp";
+    else if (event->proto == 3) proto = "icmp";
+
+    const char *action = (event->action == 1) ? "ALLOW" : "DROP";
+
+    // Print telemetry log line as structured JSON
+    lfw_log_info("{\"timestamp\": %llu, \"action\": \"%s\", \"proto\": \"%s\", \"src\": \"%s:%u\", \"dst\": \"%s:%u\", \"len\": %llu}",
+                 (unsigned long long)event->timestamp,
+                 action,
+                 proto,
+                 src_ip_str, ntohs(event->src_port),
+                 dst_ip_str, ntohs(event->dst_port),
+                 (unsigned long long)event->pkt_len);
+
+    return 0;
+}
+
+static void *telemetry_loop(void *arg)
+{
+    (void)arg;
+    int ringbuf_fd = lfw_bpf_get_events_ringbuf_fd();
+    if (ringbuf_fd < 0) {
+        lfw_log_error("Failed to get Ring Buffer FD");
+        return NULL;
+    }
+
+    struct ring_buffer *rb = ring_buffer__new(ringbuf_fd, handle_event, NULL, NULL);
+    if (!rb) {
+        lfw_log_error("Failed to initialize ring buffer");
+        return NULL;
+    }
+
+    while (g_running) {
+        int err = ring_buffer__poll(rb, 100);
+        if (err < 0 && err != -EINTR) {
+            lfw_log_error("Error polling ring buffer: %d", err);
+            break;
+        }
+    }
+
+    ring_buffer__free(rb);
+    return NULL;
+}
 
 static void handle_signal(int sig)
 {
@@ -86,6 +152,11 @@ static void cleanup(void)
 {
     lfw_log_info("cleaning up BPF subsystem...");
     g_running = 0;
+    
+    if (g_telemetry_running) {
+        pthread_join(g_telemetry_thread, NULL);
+        g_telemetry_running = false;
+    }
     
     if (g_gc_running) {
         pthread_join(g_gc_thread, NULL);
@@ -150,6 +221,14 @@ int main(int argc, char **argv)
     st = lfw_bpf_init(ifname, bpf_obj_path);
     if (st != LFW_OK) {
         lfw_log_error("failed to initialize BPF on interface %s", ifname);
+        return 1;
+    }
+
+    // Spawn telemetry thread
+    if (pthread_create(&g_telemetry_thread, NULL, telemetry_loop, NULL) == 0) {
+        g_telemetry_running = true;
+    } else {
+        lfw_log_error("failed to spawn telemetry thread");
         return 1;
     }
 
