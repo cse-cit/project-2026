@@ -19,8 +19,17 @@ struct conntrack_val {
     __u64 bytes;
     __u64 packets;
     __u32 action;  // LFW_ACTION_ACCEPT (1) or LFW_ACTION_DROP (2)
-    __u32 pad;     // Keep 8-byte alignment
+    __u8  state;   // TCP connection state
+    __u8  pad2[3]; // Keep 8-byte alignment
 };
+
+#define LFW_TCP_STATE_NONE 0
+#define LFW_TCP_STATE_SYN_SENT 1
+#define LFW_TCP_STATE_SYN_RECV 2
+#define LFW_TCP_STATE_ESTABLISHED 3
+#define LFW_TCP_STATE_FIN_WAIT 4
+#define LFW_TCP_STATE_CLOSED 5
+
 
 // Rule structure for BPF rules map
 struct bpf_rule {

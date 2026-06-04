@@ -14,6 +14,13 @@
 default deny
 
 # ---------------------------------------------------------------------
+# DHCP (UDP 67-68)
+# Required to obtain an IPv4 address from the DHCP server (e.g. WiFi AP)
+# ---------------------------------------------------------------------
+allow udp 67-68
+
+
+# ---------------------------------------------------------------------
 # TEST CASE 1: ICMP (Ping)
 # Note: Since the firewall's state table only tracks TCP/UDP flows,
 # stateless ICMP rules must be bidirectional to allow replies.
@@ -31,13 +38,13 @@ deny icmp from 1.1.1.1/32
 # ---------------------------------------------------------------------
 # TEST CASE 2: DNS Resolution (UDP 53)
 # ---------------------------------------------------------------------
-# ALLOW DNS queries to 8.8.8.8 (State tracking handles the inbound replies)
+# ALLOW general DNS queries (State tracking handles the inbound replies)
 # DENY DNS queries to 1.1.1.1
 # Test commands:
 #   dig @8.8.8.8 google.com   (Should SUCCEED)
 #   dig @1.1.1.1 google.com   (Should FAIL / Timeout)
-allow udp 53 to 8.8.8.8/32
 deny udp 53 to 1.1.1.1/32
+allow udp 53 to any
 
 # ---------------------------------------------------------------------
 # TEST CASE 3: HTTP/HTTPS Web Traffic (TCP 80 / 443)

@@ -12,7 +12,10 @@
 #include "lfw_bpf_shared.h"
 
 // Connection tracking timeouts in nanoseconds
-#define TCP_TIMEOUT_NS (300ULL * 1000000000ULL)
+#define TCP_TIMEOUT_SYN_SENT_NS (20ULL * 1000000000ULL)
+#define TCP_TIMEOUT_SYN_RECV_NS (20ULL * 1000000000ULL)
+#define TCP_TIMEOUT_FIN_WAIT_NS (30ULL * 1000000000ULL)
+#define TCP_TIMEOUT_ESTABLISHED_NS (300ULL * 1000000000ULL)
 #define UDP_TIMEOUT_NS (60ULL * 1000000000ULL)
 
 struct {
@@ -89,6 +92,7 @@ int lfw_tc_filter(struct __sk_buff *skb)
     __be16 dst_port = 0;
     __u8 lfw_proto = 0; // matching lfw_proto_t enum values (0: ANY, 1: TCP, 2: UDP, 3: ICMP)
 
+    __u8 tcp_syn = 0, tcp_ack = 0, tcp_fin = 0, tcp_rst = 0;
     if (proto == IPPROTO_TCP) {
         lfw_proto = 1;
         struct tcphdr *tcp = (void *)((__u8 *)ip + ip_hdr_len);
@@ -96,6 +100,10 @@ int lfw_tc_filter(struct __sk_buff *skb)
             return TC_ACT_OK;
         src_port = tcp->source;
         dst_port = tcp->dest;
+        tcp_syn = tcp->syn;
+        tcp_ack = tcp->ack;
+        tcp_fin = tcp->fin;
+        tcp_rst = tcp->rst;
     } else if (proto == IPPROTO_UDP) {
         lfw_proto = 2;
         struct udphdr *udp = (void *)((__u8 *)ip + ip_hdr_len);
@@ -126,21 +134,73 @@ int lfw_tc_filter(struct __sk_buff *skb)
     __u64 pkt_len = skb->len;
 
     // Conntrack check (only for TCP/UDP)
+    __u8 conntrack_found = 0;
     if (lfw_proto == 1 || lfw_proto == 2) {
         struct conntrack_val *val = bpf_map_lookup_elem(&conntrack_map, &key);
         if (val) {
-            __u64 timeout = (lfw_proto == 1) ? TCP_TIMEOUT_NS : UDP_TIMEOUT_NS;
+            __u64 timeout = UDP_TIMEOUT_NS;
+            if (lfw_proto == 1) { // TCP
+                if (val->state == LFW_TCP_STATE_SYN_SENT)
+                    timeout = TCP_TIMEOUT_SYN_SENT_NS;
+                else if (val->state == LFW_TCP_STATE_SYN_RECV)
+                    timeout = TCP_TIMEOUT_SYN_RECV_NS;
+                else if (val->state == LFW_TCP_STATE_FIN_WAIT)
+                    timeout = TCP_TIMEOUT_FIN_WAIT_NS;
+                else
+                    timeout = TCP_TIMEOUT_ESTABLISHED_NS;
+            }
+
             if (now - val->last_seen <= timeout) {
-                // Connection is established/active
+                conntrack_found = 1;
                 val->last_seen = now;
                 val->bytes    += pkt_len;
                 val->packets  += 1;
+
+                if (lfw_proto == 1) {
+                    if (tcp_rst) {
+                        val->state = LFW_TCP_STATE_CLOSED;
+                    } else if (val->state == LFW_TCP_STATE_SYN_SENT && tcp_syn && tcp_ack) {
+                        val->state = LFW_TCP_STATE_SYN_RECV;
+                    } else if (val->state == LFW_TCP_STATE_SYN_RECV && tcp_ack && !tcp_syn) {
+                        val->state = LFW_TCP_STATE_ESTABLISHED;
+                    } else if (val->state == LFW_TCP_STATE_ESTABLISHED && tcp_fin) {
+                        val->state = LFW_TCP_STATE_FIN_WAIT;
+                    } else if (val->state == LFW_TCP_STATE_FIN_WAIT && (tcp_ack || tcp_fin)) {
+                        val->state = LFW_TCP_STATE_CLOSED;
+                    }
+                }
+
                 __u32 act = val->action;
-                if (act == 1) // LFW_ACTION_ACCEPT
+                if (val->state == LFW_TCP_STATE_CLOSED) {
+                    bpf_map_delete_elem(&conntrack_map, &key);
+                }
+
+                if (act == 1)
                     return TC_ACT_OK;
                 else
                     return TC_ACT_SHOT;
+            } else {
+                bpf_map_delete_elem(&conntrack_map, &key);
             }
+        }
+    }
+
+    // Out-of-state checks for TCP
+    if (lfw_proto == 1 && !conntrack_found) {
+        if (!tcp_syn || tcp_ack || tcp_rst || tcp_fin) {
+            struct lfw_event *event = bpf_ringbuf_reserve(&events_ringbuf, sizeof(struct lfw_event), 0);
+            if (event) {
+                event->src_ip = src_ip;
+                event->dst_ip = dst_ip;
+                event->src_port = src_port;
+                event->dst_port = dst_port;
+                event->proto = lfw_proto;
+                event->action = 2; // DROP
+                event->pkt_len = pkt_len;
+                event->timestamp = now;
+                bpf_ringbuf_submit(event, 0);
+            }
+            return TC_ACT_SHOT;
         }
     }
 
@@ -248,6 +308,7 @@ int lfw_tc_filter(struct __sk_buff *skb)
             .bytes     = pkt_len,
             .packets   = 1,
             .action    = 1,
+            .state     = (lfw_proto == 1) ? LFW_TCP_STATE_SYN_SENT : 0,
         };
         bpf_map_update_elem(&conntrack_map, &key, &new_val, BPF_ANY);
     }

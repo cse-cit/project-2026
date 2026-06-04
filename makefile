@@ -91,3 +91,14 @@ $(TESTBIN): scratch/test_lfw.c $(SRC_CORE) | $(BUILD)
 		-lpthread \
 		-o $(TESTBIN)
 
+install: lfw bpf
+	mkdir -p /usr/local/share/lfw
+	mkdir -p /etc/lfw
+	cp $(LFWBIN) /usr/local/bin/lfw
+	cp $(BPF_OBJ) /usr/local/share/lfw/lfw_bpf.o
+	cp lfw.rules /etc/lfw/lfw.rules
+	cp lfw@.service /etc/systemd/system/lfw@.service
+	systemctl daemon-reload
+	@echo "[lfw] Installed system-wide successfully!"
+
+
