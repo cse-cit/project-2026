@@ -8,17 +8,11 @@
 
 namespace hft {
 
-// Lock-free log-linear latency histogram (HdrHistogram-style).
-// Covers 0 ns .. ~1.8e19 ns with bounded relative error:
-// each power-of-two magnitude is split into SUB_BUCKETS linear sub-buckets,
-// so worst-case relative error = 1 / SUB_BUCKETS (~6.25% at 4 bits).
-// All counters are std::atomic with relaxed ordering: safe for many writers,
-// percentile()/mean() are approximate snapshots under concurrent writes.
 class LatencyHistogram {
 public:
-    static constexpr size_t MAGNITUDES   = 64;            // one per bit
+    static constexpr size_t MAGNITUDES   = 64;
     static constexpr size_t SUB_BITS     = 4;
-    static constexpr size_t SUB_BUCKETS  = size_t(1) << SUB_BITS; // 16
+    static constexpr size_t SUB_BUCKETS  = size_t(1) << SUB_BITS;
     static constexpr size_t TOTAL_BUCKETS = MAGNITUDES * SUB_BUCKETS;
 
     void record(uint64_t value_ns) {
@@ -29,7 +23,6 @@ public:
         update_max(value_ns);
     }
 
-    // p in [0,1]; returns representative latency in ns.
     double percentile(double p) const {
         uint64_t total = total_count_.load(std::memory_order_relaxed);
         if (total == 0) return 0.0;
@@ -68,21 +61,19 @@ public:
     }
 
 private:
-    // Map value -> [magnitude][sub-bucket]. value 0 and values below
-    // 2^SUB_BITS land linearly in magnitude 0 (no precision loss there).
+
     size_t bucket_index(uint64_t value_ns) const {
-        if (value_ns < SUB_BUCKETS) return value_ns; // dense low end
+        if (value_ns < SUB_BUCKETS) return value_ns;
         size_t magnitude = 63 - static_cast<size_t>(__builtin_clzll(value_ns));
         size_t shift = magnitude - SUB_BITS;
         size_t sub = (value_ns >> shift) & (SUB_BUCKETS - 1);
         return magnitude * SUB_BUCKETS + sub;
     }
 
-    // Representative (lower-edge) ns value for a bucket index.
     uint64_t bucket_to_ns(size_t index) const {
         size_t magnitude = index / SUB_BUCKETS;
         size_t sub       = index % SUB_BUCKETS;
-        if (magnitude < SUB_BITS) return index; // matches dense low end
+        if (magnitude < SUB_BITS) return index;
         size_t shift = magnitude - SUB_BITS;
         return (uint64_t(SUB_BUCKETS) << shift) + (uint64_t(sub) << shift);
     }
@@ -106,4 +97,4 @@ private:
     std::atomic<uint64_t> max_{0};
 };
 
-} // namespace hft
+}

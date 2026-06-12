@@ -60,7 +60,7 @@ bool LimitOrderBook::modify(uint64_t order_id, uint32_t new_qty) {
 
     Order* ord = *mit->second.list_it;
     if (new_qty >= ord->qty) {
-        // Increase qty: simple update (loses queue priority on some exchanges)
+
         uint32_t delta = new_qty - ord->qty;
         ord->qty = new_qty;
         if (ord->side == Side::Buy) {
@@ -71,7 +71,6 @@ bool LimitOrderBook::modify(uint64_t order_id, uint32_t new_qty) {
         return true;
     }
 
-    // Decrease qty: update in place (preserves queue priority)
     uint32_t old_leaves = ord->leaves_qty();
     ord->qty = new_qty;
     uint32_t new_leaves = ord->leaves_qty();
@@ -85,6 +84,14 @@ bool LimitOrderBook::modify(uint64_t order_id, uint32_t new_qty) {
 
     if (ord->leaves_qty() == 0) cancel(order_id);
     return true;
+}
+
+uint32_t LimitOrderBook::qty_at(double price) const noexcept {
+    auto bit = bids_.find(price);
+    if (bit != bids_.end()) return bit->second.total_qty;
+    auto ait = asks_.find(price);
+    if (ait != asks_.end()) return ait->second.total_qty;
+    return 0;
 }
 
 std::optional<double> LimitOrderBook::best_bid() const noexcept {
@@ -174,4 +181,4 @@ void LimitOrderBook::remove_level_if_empty(Side side, double price) {
     }
 }
 
-} // namespace hft
+}

@@ -207,3 +207,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     run(args.ticks, args.entry_z, args.seed, args.plot,
         args.source, args.sym_a, args.sym_b, args.period, args.interval)
+

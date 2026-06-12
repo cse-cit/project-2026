@@ -60,4 +60,4 @@ void SimulationEngine::execute_order(const Order& order) {
     trades_.push_back(Trade{order.side, execution_price, order.size, 0.0});
 }
 
-} // namespace hft
+}

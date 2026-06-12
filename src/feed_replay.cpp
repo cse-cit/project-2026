@@ -9,15 +9,13 @@
 
 namespace hft {
 
-// ─── CsvTickReplay ────────────────────────────────────────────────────────────
-
 void CsvTickReplay::load(const std::string& path) {
     std::ifstream f(path);
     if (!f) throw std::runtime_error("CsvTickReplay: cannot open " + path);
 
     ticks_.clear();
     std::string line;
-    std::getline(f, line); // skip header
+    std::getline(f, line);
 
     while (std::getline(f, line)) {
         if (line.empty()) continue;
@@ -26,7 +24,6 @@ void CsvTickReplay::load(const std::string& path) {
         char sep;
         std::string is_trade_str;
 
-        // ts_ns,symbol,price,bid,ask,size,is_trade
         ss >> t.ts_ns >> sep;
         std::getline(ss, t.symbol, ',');
         ss >> t.price >> sep >> t.bid >> sep >> t.ask >> sep >> t.size >> sep;
@@ -44,7 +41,7 @@ void CsvTickReplay::play(TickCallback cb, double speed_multiplier) {
     using hrc = high_resolution_clock;
 
     if (speed_multiplier <= 0.0) {
-        // Max speed: no sleep
+
         for (const auto& t : ticks_) cb(t);
         return;
     }
@@ -53,7 +50,7 @@ void CsvTickReplay::play(TickCallback cb, double speed_multiplier) {
     auto wall_start = hrc::now();
 
     for (const auto& t : ticks_) {
-        // Data elapsed time since first tick
+
         double data_elapsed_ns = static_cast<double>(t.ts_ns - first_data_ts);
         double wall_elapsed_ns = data_elapsed_ns / speed_multiplier;
 
@@ -65,8 +62,6 @@ void CsvTickReplay::play(TickCallback cb, double speed_multiplier) {
         cb(t);
     }
 }
-
-// ─── SyntheticFeed ────────────────────────────────────────────────────────────
 
 struct SyntheticFeed::Impl {
     std::mt19937                     rng;
@@ -83,19 +78,18 @@ SyntheticFeed::SyntheticFeed(Params p)
 }
 
 TickEvent SyntheticFeed::next_tick() {
-    // GBM Euler-Maruyama: S(t+dt) = S(t) * exp((μ - σ²/2)dt + σ√dt W)
+
     double dW    = impl_->dist(impl_->rng);
     double log_r = (params_.mu - 0.5 * params_.sigma * params_.sigma) +
                     params_.sigma * dW;
     price_ = std::max(params_.tick_size, price_ * std::exp(log_r));
 
-    // Snap to tick grid
     price_ = std::round(price_ / params_.tick_size) * params_.tick_size;
 
     double half_spread = params_.spread_ticks * params_.tick_size / 2.0;
 
     TickEvent t;
-    t.ts_ns    = ts_ns_ += 1'000'000; // 1ms per tick by default
+    t.ts_ns    = ts_ns_ += 1'000'000;
     t.symbol   = params_.symbol;
     t.price    = price_;
     t.bid      = price_ - half_spread;
@@ -129,8 +123,6 @@ std::vector<double> SyntheticFeed::generate_ou(size_t n, OUParams p, unsigned se
     return out;
 }
 
-// ── OUSpreadFeed ──────────────────────────────────────────────────────────────
-
 struct OUSpreadFeed::Impl {
     std::mt19937                     rng;
     std::normal_distribution<double> dist{0.0, 1.0};
@@ -158,11 +150,9 @@ std::pair<TickEvent, TickEvent> OUSpreadFeed::next() {
 
     double dW1 = dist(rng), dW2 = dist(rng), dWs = dist(rng);
 
-    // Common price move
     double common = sigma_price_ * std::sqrt(dt_) * dW1;
     price_a_ = std::max(tick_size_, price_a_ * (1.0 + common + sigma_price_ * dW2 * 0.3));
 
-    // OU spread
     spread_ += theta_ * (mu_spread_ - spread_) * dt_ + sigma_spread_ * std::sqrt(dt_) * dWs;
     price_b_ = std::max(tick_size_, price_a_ + spread_);
 
@@ -184,4 +174,4 @@ std::pair<TickEvent, TickEvent> OUSpreadFeed::next() {
 
 OUSpreadFeed::~OUSpreadFeed() = default;
 
-} // namespace hft
+}

@@ -236,6 +236,76 @@ void test_fill_callback_fires() {
     ASSERT_EQ(fill_count, 1);
 }
 
+// ─── Order-type tests (post-only, stop, stop-limit, iceberg) ─────────────────
+
+void test_post_only_rejected_on_cross() {
+    auto eng = make_engine();
+    eng.submit(make_order(eng, Side::Sell, 100.0, 100));       // ask 100
+    Order po = make_order(eng, Side::Buy, 100.0, 100, OrdType::PostOnly); // would cross
+    auto r = eng.submit(po);
+    ASSERT(!r.accepted);
+    auto* lob = eng.book("AAPL");
+    ASSERT(!lob->best_bid().has_value());                      // nothing rested
+}
+
+void test_post_only_rests_when_passive() {
+    auto eng = make_engine();
+    eng.submit(make_order(eng, Side::Sell, 101.0, 100));       // ask 101
+    Order po = make_order(eng, Side::Buy, 100.0, 100, OrdType::PostOnly); // passive
+    auto r = eng.submit(po);
+    ASSERT(r.accepted);
+    auto* lob = eng.book("AAPL");
+    ASSERT(lob->best_bid().has_value());
+    ASSERT_NEAR(*lob->best_bid(), 100.0, 1e-9);
+}
+
+void test_stop_market_triggers_immediately() {
+    auto eng = make_engine();
+    int fills = 0; eng.on_fill = [&](const Fill&){ ++fills; };
+    eng.submit(make_order(eng, Side::Sell, 105.0, 100));       // ask 105
+    Order stop = make_order(eng, Side::Buy, 0.0, 100, OrdType::Stop);
+    stop.stop_price = 104.0;                                   // ask 105 >= 104 -> fire
+    eng.submit(stop);
+    ASSERT_EQ(fills, 1);
+}
+
+void test_stop_waits_then_triggers() {
+    auto eng = make_engine();
+    int fills = 0; eng.on_fill = [&](const Fill&){ ++fills; };
+    eng.submit(make_order(eng, Side::Sell, 100.0, 100));       // ask 100
+    Order stop = make_order(eng, Side::Buy, 0.0, 50, OrdType::Stop);
+    stop.stop_price = 105.0;                                   // needs ask >= 105
+    eng.submit(stop);
+    ASSERT_EQ(fills, 0);                                       // not yet
+    eng.submit(make_order(eng, Side::Buy, 100.0, 100));        // take ask 100 (fills=1)
+    eng.submit(make_order(eng, Side::Sell, 106.0, 100));       // ask 106 -> stop fires
+    ASSERT(fills >= 2);
+}
+
+void test_stop_limit_triggers_as_limit() {
+    auto eng = make_engine();
+    eng.submit(make_order(eng, Side::Sell, 105.0, 100));       // ask 105
+    Order sl = make_order(eng, Side::Buy, 105.0, 100, OrdType::StopLimit);
+    sl.stop_price = 104.0;                                     // fires, becomes limit @105
+    auto r = eng.submit(sl);
+    ASSERT(r.accepted);
+}
+
+void test_iceberg_hides_and_replenishes() {
+    auto eng = make_engine();
+    Order ice = make_order(eng, Side::Sell, 100.0, 300, OrdType::Iceberg);
+    ice.display_qty = 100;
+    eng.submit(ice);
+    auto* lob = eng.book("AAPL");
+    ASSERT_EQ(lob->qty_at(100.0), 100u);                       // only the clip shows
+    eng.submit(make_order(eng, Side::Buy, 0.0, 100, OrdType::Market));
+    ASSERT_EQ(lob->qty_at(100.0), 100u);                       // replenished (clip 2)
+    eng.submit(make_order(eng, Side::Buy, 0.0, 100, OrdType::Market));
+    ASSERT_EQ(lob->qty_at(100.0), 100u);                       // replenished (clip 3)
+    eng.submit(make_order(eng, Side::Buy, 0.0, 100, OrdType::Market));
+    ASSERT_EQ(lob->qty_at(100.0), 0u);                         // reserve exhausted
+}
+
 } // anonymous namespace
 
 int main() {
@@ -254,6 +324,12 @@ int main() {
     run_test("Cancel live order",              test_cancel_live_order);
     run_test("Multi-level sweep",              test_multi_level_sweep);
     run_test("Fill callback fires",            test_fill_callback_fires);
+    run_test("Post-only rejected on cross",    test_post_only_rejected_on_cross);
+    run_test("Post-only rests when passive",   test_post_only_rests_when_passive);
+    run_test("Stop market triggers now",       test_stop_market_triggers_immediately);
+    run_test("Stop waits then triggers",       test_stop_waits_then_triggers);
+    run_test("Stop-limit triggers as limit",   test_stop_limit_triggers_as_limit);
+    run_test("Iceberg hides + replenishes",    test_iceberg_hides_and_replenishes);
 
     std::cout << std::string(40, '=') << "\n";
     std::cout << "Results: " << (tests_run - tests_failed)

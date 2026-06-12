@@ -44,4 +44,4 @@ std::vector<Order> MeanReversionStrategy::generate_orders(const Tick& market_sta
     return {};
 }
 
-} // namespace hft
+}

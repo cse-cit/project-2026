@@ -36,4 +36,4 @@ private:
     std::mt19937 rng_;
 };
 
-} // namespace hft
+}

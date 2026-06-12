@@ -52,6 +52,13 @@ class BinanceFeed(LiveFeed):
 
     def stop(self) -> None:
         self._stop = True
+        if hasattr(self, "_ws") and self._ws:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self._ws.close())
+            except Exception:
+                pass
 
     def _url(self) -> str:
         s = self._symbol.lower()
@@ -71,6 +78,7 @@ class BinanceFeed(LiveFeed):
                     ping_timeout=20,
                     max_queue=1024,
                 ) as ws:
+                    self._ws = ws
                     log.info("Binance feed connected: %s", self._url())
                     backoff = 1.0
                     async for raw in ws:

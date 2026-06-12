@@ -1,3 +1,4 @@
+
 # Build folders
 build/
 
@@ -33,4 +34,24 @@ hft_gui.log
 hft_gui_run.log
 
 
-ROADMAP.mdQuantTrade/
+ROADMAP.md
+QuantTrade/
+build_dbg/
+
+# Compiled dynamic libraries
+*.dylib
+strategies/*.dylib
+
+# Third-party library examples
+third_party/imgui/examples/
+third_party/implot/examples/
+
+
+
+third_party/
+examples/
+
+# Reports (large PDFs/tex kept locally)
+reports/
+docs/
+research/

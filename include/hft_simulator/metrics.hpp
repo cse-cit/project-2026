@@ -8,16 +8,14 @@
 
 namespace hft {
 
-// Cache-line aligned to avoid false sharing between threads
 struct alignas(64) TradingMetrics {
     std::atomic<uint64_t> orders_sent{0};
     std::atomic<uint64_t> orders_filled{0};
     std::atomic<uint64_t> orders_cancelled{0};
     std::atomic<uint64_t> orders_rejected{0};
-    std::atomic<int64_t>  net_position{0};      // shares (+ = long)
-    std::atomic<int64_t>  gross_pnl_cents{0};   // PnL in cents
+    std::atomic<int64_t>  net_position{0};
+    std::atomic<int64_t>  gross_pnl_cents{0};
 
-    // Latency histogram: bucket = microseconds, 0-999µs + overflow
     static constexpr size_t HIST_BUCKETS = 1000;
     std::atomic<uint64_t> latency_hist[HIST_BUCKETS]{};
     std::atomic<uint64_t> latency_overflow{0};
@@ -40,7 +38,6 @@ struct alignas(64) TradingMetrics {
             latency_overflow.fetch_add(1, std::memory_order_relaxed);
     }
 
-    // Compute percentile (0.0–1.0). Returns microseconds.
     double percentile(double p) const {
         uint64_t total = 0;
         for (size_t i = 0; i < HIST_BUCKETS; ++i)
@@ -54,7 +51,7 @@ struct alignas(64) TradingMetrics {
             cum += latency_hist[i].load(std::memory_order_relaxed);
             if (cum >= target) return static_cast<double>(i);
         }
-        return static_cast<double>(HIST_BUCKETS); // overflow bucket
+        return static_cast<double>(HIST_BUCKETS);
     }
 
     void reset() {
@@ -69,7 +66,6 @@ struct alignas(64) TradingMetrics {
     }
 };
 
-// Inline rdtsc for sub-microsecond timing
 inline uint64_t rdtsc() {
 #ifdef __x86_64__
     uint32_t lo, hi;
@@ -82,4 +78,4 @@ inline uint64_t rdtsc() {
 #endif
 }
 
-} // namespace hft
+}

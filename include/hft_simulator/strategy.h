@@ -44,4 +44,4 @@ private:
     std::vector<double> history_;
 };
 
-} // namespace hft
+}

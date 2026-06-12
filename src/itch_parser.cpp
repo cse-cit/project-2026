@@ -15,7 +15,7 @@ uint64_t ITCHParser::decode_ts(const uint8_t ts[6]) {
 
 std::string ITCHParser::decode_symbol(const char stock[8]) {
     std::string s(stock, 8);
-    // Trim trailing spaces
+
     size_t end = s.find_last_not_of(' ');
     return (end == std::string::npos) ? "" : s.substr(0, end + 1);
 }
@@ -55,7 +55,7 @@ size_t ITCHParser::parse_message(const uint8_t* msg, size_t available) {
         return sizeof(ITCHTrade);
     }
     default:
-        // Unknown message type: skip 1 byte to resync
+
         return 1;
     }
 }
@@ -73,7 +73,6 @@ void ITCHParser::parse_file(const std::string& path) {
     std::ifstream f(path, std::ios::binary);
     if (!f) throw std::runtime_error("ITCHParser: cannot open " + path);
 
-    // Read entire file into buffer (fine for files < a few GB)
     f.seekg(0, std::ios::end);
     size_t size = static_cast<size_t>(f.tellg());
     f.seekg(0);
@@ -82,4 +81,4 @@ void ITCHParser::parse_file(const std::string& path) {
     parse(buf.data(), size);
 }
 
-} // namespace hft
+}

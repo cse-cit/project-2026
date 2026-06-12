@@ -8,22 +8,17 @@
 
 namespace hft {
 
-// ─── Kill Switch ────────────────────────────────────────────────────────────
-
 class KillSwitch {
 public:
     void arm()   { active_.store(true,  std::memory_order_release); }
     void disarm(){ active_.store(false, std::memory_order_release); }
     bool is_active() const { return active_.load(std::memory_order_acquire); }
 
-    // Hot path: < 5ns — relaxed load, no sync needed for a monotone flag
     bool check() const noexcept { return active_.load(std::memory_order_relaxed); }
 
 private:
     alignas(64) std::atomic<bool> active_{false};
 };
-
-// ─── Token Bucket Rate Limiter ────────────────────────────────────────────────
 
 class TokenBucket {
 public:
@@ -48,12 +43,10 @@ private:
     std::chrono::steady_clock::time_point last_ts_;
 };
 
-// ─── Pre-Trade Risk Checker ───────────────────────────────────────────────────
-
 struct PreTradeRiskLimits {
     uint32_t max_order_qty         = 10'000;
-    int64_t  max_position_notional = 1'000'000'00LL; // $1M in cents
-    double   max_price_dev_bps     = 50.0;           // 50bps from mid
+    int64_t  max_position_notional = 1'000'000'00LL;
+    double   max_price_dev_bps     = 50.0;
     double   order_rate_per_sec    = 500.0;
     double   burst                 = 50.0;
 };
@@ -120,8 +113,6 @@ private:
     TokenBucket  rate_limiter_;
 };
 
-// ─── Stale Price Guard ────────────────────────────────────────────────────────
-
 class StalePriceGuard {
 public:
     explicit StalePriceGuard(int64_t max_age_ns, KillSwitch& ks)
@@ -143,4 +134,4 @@ private:
     KillSwitch&              kill_switch_;
 };
 
-} // namespace hft
+}

@@ -40,4 +40,4 @@ private:
     double total_latency_seconds_;
 };
 
-} // namespace hft
+}

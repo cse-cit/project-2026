@@ -10,4 +10,4 @@ inline double seconds_elapsed(const Clock::time_point& start, const Clock::time_
     return std::chrono::duration<double>(end - start).count();
 }
 
-} // namespace hft
+}

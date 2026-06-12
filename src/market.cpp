@@ -35,4 +35,4 @@ std::vector<Tick> MarketDataGenerator::generate_series(int length) {
     return ticks;
 }
 
-} // namespace hft
+}

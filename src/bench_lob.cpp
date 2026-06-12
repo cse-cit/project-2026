@@ -1,15 +1,3 @@
-/**
- * QuantSim LOB + Matching Engine Benchmark
- * ─────────────────────────────────────────
- * Measures:
- *   1. Order-add throughput      (M orders/sec)
- *   2. Cancel throughput         (M cancels/sec)
- *   3. Market-order match latency (ns, percentile histogram)
- *   4. Mixed realistic workload  (60% add / 20% cancel / 20% market)
- *
- * Build:  cmake --build build --target run_benchmark
- * Run:    ./build/run_benchmark [--orders N] [--warmup N]
- */
 
 #include "hft_simulator/orderbook.hpp"
 #include "hft_simulator/matching.hpp"
@@ -34,8 +22,6 @@ static double to_ns(Clock::duration d) {
     return static_cast<double>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(d).count());
 }
-
-// ── Statistics ────────────────────────────────────────────────────────────────
 
 struct Stats {
     double min_ns, max_ns, mean_ns;
@@ -72,8 +58,6 @@ static void print_stats(const char* label, const Stats& s) {
               << "  └─────────────────────────────────────────────────┘\n";
 }
 
-// ── Benchmark helpers ─────────────────────────────────────────────────────────
-
 static Order make_limit(uint64_t& seq, const std::string& sym,
                          Side side, double price, uint32_t qty = 100) {
     Order o;
@@ -90,8 +74,6 @@ static Order make_market(uint64_t& seq, const std::string& sym, Side side, uint3
     o.ts_ns = seq * 1'000;
     return o;
 }
-
-// ── 1. Add throughput ─────────────────────────────────────────────────────────
 
 static Stats bench_add(size_t N, size_t warmup) {
     LimitOrderBook book("AAPL");
@@ -117,8 +99,6 @@ static Stats bench_add(size_t N, size_t warmup) {
     return compute_stats(samples);
 }
 
-// ── 2. Cancel throughput ──────────────────────────────────────────────────────
-
 static Stats bench_cancel(size_t N, size_t warmup) {
     LimitOrderBook book("AAPL");
     std::mt19937 rng(7);
@@ -141,14 +121,11 @@ static Stats bench_cancel(size_t N, size_t warmup) {
     return compute_stats(samples);
 }
 
-// ── 3. Market order match latency ─────────────────────────────────────────────
-
 static Stats bench_match(size_t N, size_t warmup) {
     MatchingEngine eng;
     const std::string sym = "AAPL";
     uint64_t seq = 0;
 
-    // Seed: 100 bid and ask levels, 1000 shares each
     for (int i = 0; i < 100; ++i) {
         eng.submit(make_limit(seq, sym, Side::Buy,  100.00 - i * 0.01, 1000));
         eng.submit(make_limit(seq, sym, Side::Sell, 100.01 + i * 0.01, 1000));
@@ -177,9 +154,6 @@ static Stats bench_match(size_t N, size_t warmup) {
     return compute_stats(samples);
 }
 
-// ── 4. Mixed realistic workload ───────────────────────────────────────────────
-// 60% passive limit adds  |  20% cancels  |  20% aggressive market orders
-
 static Stats bench_mixed(size_t N, size_t warmup) {
     MatchingEngine eng;
     const std::string sym = "AAPL";
@@ -190,7 +164,6 @@ static Stats bench_mixed(size_t N, size_t warmup) {
     std::vector<uint64_t> live;
     live.reserve(50'000);
 
-    // Seed book
     for (int i = 0; i < 50; ++i) {
         auto b = make_limit(seq, sym, Side::Buy,  99.99 - i * 0.01, 500);
         auto a = make_limit(seq, sym, Side::Sell, 100.01 + i * 0.01, 500);
@@ -206,18 +179,15 @@ static Stats bench_mixed(size_t N, size_t warmup) {
         int a = act(rng);
         auto t0 = Clock::now();
         if (a < 6) {
-            // Passive limit add
             Side s = (i % 2 == 0) ? Side::Buy : Side::Sell;
             auto o = make_limit(seq, sym, s, std::round(px(rng) * 100) / 100.0);
             eng.submit(o);
             live.push_back(o.id);
         } else if (a < 8 && !live.empty()) {
-            // Cancel
             size_t idx = rng() % live.size();
             eng.cancel(live[idx]);
             live.erase(live.begin() + static_cast<ptrdiff_t>(idx));
         } else {
-            // Aggressive market
             Side s = (i % 3 == 0) ? Side::Buy : Side::Sell;
             eng.submit(make_market(seq, sym, s, 100));
         }
@@ -225,8 +195,6 @@ static Stats bench_mixed(size_t N, size_t warmup) {
     }
     return compute_stats(samples);
 }
-
-// ── main ─────────────────────────────────────────────────────────────────────
 
 int main(int argc, char** argv) {
     size_t N      = 500'000;
@@ -273,7 +241,6 @@ int main(int argc, char** argv) {
     auto s4 = bench_mixed(N, warmup);
     print_stats("4. Mixed workload  (60% add | 20% cancel | 20% market)", s4);
 
-    // ── Summary ───────────────────────────────────────────────────────────────
     std::cout
         << "\n  ┌──────────────────────────────────────────────────────────┐\n"
         << "  │                      SUMMARY                             │\n"
