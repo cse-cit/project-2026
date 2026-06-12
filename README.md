@@ -1,79 +1,37 @@
-# HFT Simulator Project Plan (C++)
+# QuantSim — HFT Simulation Platform
 
-## Project Goal
-Build a High-Frequency Trading (HFT) simulation platform in C++ that lets a developer:
-- write and modify trading logic,
-- run fast market simulation,
-- measure execution speed and latency,
-- compare strategies and order execution behavior.
+A production-grade high-frequency trading simulator written in C++. Designed to mirror the architecture of a real quant trading firm's stack: a low-latency matching engine, pluggable strategy layer, live market data integration, and a full desktop GUI.
 
-## Key Features
-1. Market simulator with synthetic tick generation and order book snapshots.
-2. Strategy interface with sample momentum and mean-reversion strategies.
-3. Simulation engine that executes orders, records trades, and reports latency.
-4. A runnable C++ example in `src/main.cpp`.
+## What It Does
 
-## Architecture
-- `include/hft_simulator/market.h` / `src/market.cpp`: market data generation and order book simulation.
-- `include/hft_simulator/strategy.h` / `src/strategy.cpp`: strategy base class and strategy examples.
-- `include/hft_simulator/engine.h` / `src/engine.cpp`: core simulation engine and trade execution.
-- `include/hft_simulator/benchmark.h` / `src/benchmark.cpp`: timing helper utilities.
-- `include/hft_simulator/ui.h` / `src/ui.cpp`: GTK UI with a built-in text editor and simulation control panel.
-- `src/main.cpp`: command-line simulation runner.
-- `src/gui_main.cpp`: GTK GUI entrypoint.
-- `CMakeLists.txt`: build configuration.
+- Runs backtests against synthetic or CSV tick data with a realistic limit order book
+- Supports 9 built-in strategies: Market Making (Avellaneda-Stoikov), Stat Arb, TWAP, Momentum, Mean Reversion, RSI, Breakout, Portfolio (N-asset), Options MM (Black-Scholes + Greeks)
+- Compiles and loads custom C++ strategies at runtime via `.dylib` hot-swap
+- Connects to Binance WebSocket for live paper trading
+- Full Dear ImGui desktop GUI with real-time charts, order book ladder, optimizer, risk panel, and TCA tab
 
-## Build and Run
-1. Create a build directory:
-   ```bash
-   mkdir -p build && cd build
-   ```
-2. Configure with CMake (requires CMake 3.23+):
-   ```bash
-   cmake ..
-   ```
-3. Build the simulator:
-   ```bash
-   cmake --build .
-   ```
-4. Run the command-line example:
-   ```bash
-   ./run_simulation
-   ```
-5. If gtkmm-4.0 and pkg-config are installed, the GUI binary will also be available:
-   ```bash
-   ./hft_gui
-   ```
 
-> On macOS, install required GUI dependencies with Homebrew if needed:
-> ```bash
-> brew install pkg-config gtk4 gtkmm4
-> ```
+## Build & Run
 
-## Next Steps
-- add a command-line mode for selecting strategies,
-- add CSV output for latency and PnL comparison,
-- model fees, slippage, and exchange latency,
-- add multi-agent or market maker behavior,
-- provide a live visualization or replay mode.
+```bash
+./start.sh
+```
 
----
+Requires: CMake 3.23+, clang++, GLFW (`brew install glfw`), OpenSSL.
 
-## Folder Layout
-- `README.md`
-- `CMakeLists.txt`
-- `include/hft_simulator/`
-- `include/hft_simulator/`
-  - `benchmark.h`
-  - `engine.h`
-  - `market.h`
-  - `strategy.h`
-- `src/`
-  - `benchmark.cpp`
-  - `engine.cpp`
-  - `market.cpp`
-  - `strategy.cpp`
-  - `ui.cpp`
-  - `main.cpp`
-  - `gui_main.cpp`
+The script builds `quantsim` (GUI), `live_trader` (Binance live), and `quantsim_core` (Python module), then launches the app.
+
+## Key Engine Features
+
+- **Matching engine**: price-time FIFO with stop/stop-limit, post-only, iceberg, FOK, IOC order types
+- **Realistic fills**: log-normal network latency model + FIFO queue position tracking
+- **Transaction costs**: taker fee, maker rebate, short borrow per tick
+- **Pre-trade risk**: max position, max notional, max loss kill-switch
+- **Bot simulator**: configurable market participant bots for realistic book activity
+- **Parameter optimizer**: grid search / sweep across 1-2 strategy parameters with heatmap output
+- **Compare tab**: run up to 5 strategies side-by-side with tearsheet metrics
+
+## Metrics Reported
+
+Sharpe, Sortino, Calmar, Max Drawdown, Volatility, Win Rate, Profit Factor, Fill count, Avg Slippage, Queue Position, Maker %, VaR 95%, Greeks (options mode)
 
