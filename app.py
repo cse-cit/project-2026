@@ -177,12 +177,7 @@ def generate_pdf(
         )
     )
 
-    elements.append(
-        Paragraph(
-            "Generated using Attendance List Generator",
-            info_style
-        )
-    )
+   
 
     elements.append(Spacer(1, 20))
 
