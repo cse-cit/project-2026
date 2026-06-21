@@ -1,0 +1,55 @@
+
+# Build folders
+build/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*.bak
+
+# macOS
+.DS_Store
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Generated binaries
+run_simulation
+*.o
+*.obj
+*.exe
+
+# Python
+__pycache__/
+*.pyc
+*.so
+
+# Live session runtime artifacts
+.quantsim_live.pid
+hft_gui.log
+hft_gui_run.log
+
+
+ROADMAP.md
+QuantTrade/
+build_dbg/
+
+# Compiled dynamic libraries
+*.dylib
+strategies/*.dylib
+
+# Third-party library examples
+QuantDev/third_party/imgui/examples/
+QuantDev/third_party/implot/examples/
+
+QuantDev/third_party/
+QuantDev/examples/
+
+# Reports (large PDFs/tex kept locally)
+reports/
+docs/
+research/

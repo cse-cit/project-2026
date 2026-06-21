@@ -1,0 +1,12 @@
+% Merged print file: 4 front-matter variants followed by the book body.
+% Compile: tectonic -X compile QuantSim_Print_Merged.tex
+\documentclass{article}
+\usepackage[a4paper,margin=0pt]{geometry}
+\usepackage{pdfpages}
+\begin{document}
+\includepdf[pages=-]{QuantSim_FrontMatter_Overall.pdf}
+\includepdf[pages=-]{QuantSim_FrontMatter_Abhishek.pdf}
+\includepdf[pages=-]{QuantSim_FrontMatter_Shakir.pdf}
+\includepdf[pages=-]{QuantSim_FrontMatter_Affan.pdf}
+\includepdf[pages=-]{QuantSim_Book.pdf}
+\end{document}
