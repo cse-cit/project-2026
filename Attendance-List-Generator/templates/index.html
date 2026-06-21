@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Attendance List Generator</title>
+
+<link rel="stylesheet" href="/static/css/style.css">
+
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Font Awesome -->
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+
+</head>
+
+<body class="landing-page">
+
+<div class="bg-circle circle1"></div>
+<div class="bg-circle circle2"></div>
+
+<div class="hero-container">
+
+    <!-- Logo -->
+    <img src="/static/images/logo.png"
+         class="main-logo"
+         alt="logo">
+
+    <!-- Heading -->
+    <h1>Attendance List Generator</h1>
+
+    <p class="subtitle">
+        Smart, Fast and Professional Attendance Report Generation System
+    </p>
+
+    <!-- Button -->
+    <button class="start-btn" onclick="goToForm()">
+        <i class="fa-solid fa-arrow-right"></i>
+        Get Started
+    </button>
+
+    <!-- Features -->
+    <div class="feature-grid">
+
+        <div class="feature-card">
+            <i class="fa-solid fa-users"></i>
+            <h3>Student Management</h3>
+            <p>Add and remove students dynamically.</p>
+        </div>
+
+        <div class="feature-card">
+            <i class="fa-solid fa-chart-line"></i>
+            <h3>Real-Time Calculation</h3>
+            <p>Instant attendance percentage calculation.</p>
+        </div>
+
+        <div class="feature-card">
+            <i class="fa-solid fa-file-pdf"></i>
+            <h3>PDF Reports</h3>
+            <p>Generate professional attendance reports.</p>
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<script>
+
+function goToForm() {
+
+    document.body.style.opacity = "0";
+
+    setTimeout(() => {
+
+        window.location.href = "/form";
+
+    }, 500);
+
+}
+
+</script>
+
+</body>
+</html>
