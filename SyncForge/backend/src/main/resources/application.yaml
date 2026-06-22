@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: SyncForge
+
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/syncforge}
+
+server:
+  port: 8080
+
+gemini:
+  api-key: gemini_api_key
+
+  
