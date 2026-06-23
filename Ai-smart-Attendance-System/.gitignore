@@ -1,0 +1,14 @@
+.env
+.vscode
+
+
+*.pyc
+.Ds_Store
+__pycache__/
+
+venv/
+
+.streamlit/
+
+dist/ .venv 
+venv 
