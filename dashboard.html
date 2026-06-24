@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ResQNet Real-Time Emergency Mapping Console</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.socketio.org/4.5.4/socketio.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #000000;
+            color: #00ff00;
+            margin: 0;
+            padding: 15px;
+        }
+        .console-title {
+            text-align: center;
+            font-size: 1.6rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+        }
+        /* Outer Border Frame container */
+        .grid-container {
+            display: grid;
+            grid-template-columns: 35% 65%;
+            gap: 15px;
+            border: 2px solid #00ff00;
+            padding: 15px;
+            height: 80vh;
+        }
+        /* Left Column Panel */
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .panel-box {
+            border: 2px solid #00ff00;
+            padding: 15px;
+            flex: 1;
+            background-color: #050505;
+        }
+        .panel-header {
+            text-align: center;
+            font-weight: bold;
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #ffff00;
+        }
+        /* Alert Red Box Zone */
+        .alert-zone {
+            border: 2px solid #ff0000;
+            color: #ff3333;
+            padding: 15px;
+            display: none; /* Initially hidden until crash triggers */
+        }
+        .alert-title {
+            text-align: center;
+            font-weight: bold;
+            animation: blink 1.5s infinite;
+        }
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+        .telemetry-row {
+            margin: 10px 0;
+            font-size: 1.1rem;
+        }
+        /* Right Map Box Panel Zone */
+        .map-panel {
+            border: 2px solid #00ff00;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            background-color: #050505;
+        }
+        #map {
+            width: 100%;
+            flex: 1;
+            border: 1px solid #555;
+        }
+    </style>
+</head>
+<body>
+
+<div class="console-title">ResQNet Real-Time Emergency Mapping Console</div>
+
+<div class="grid-container">
+    
+    <div class="left-panel">
+        <div class="panel-box" id="log-box">
+            <div class="panel-header">[ INCIDENT LOGS ]</div>
+            
+            <div id="awaiting-text" style="color: #888; font-size: 1.2rem; margin-top: 30px;">Awaiting telemetry data packet via edge proxy tunnel...</div>
+            
+            <div id="incident-alert" class="alert-zone">
+                <div class="alert-title">** CRASH DETECTED **</div>
+                <hr style="border-color: #ff0000;">
+                <div class="telemetry-row"><b>ID:</b> <span id="lbl-id">JH-01-XX-9999</span></div>
+                <div class="telemetry-row"><b>Velocity:</b> <span id="lbl-speed">0.0</span> km/h</div>
+                <div class="telemetry-row"><b>Lat/Lng:</b> <span id="lbl-coords">0.00, 0.00</span></div>
+            </div>
+        </div>
+        
+        <div class="panel-box">
+            <div id="cloud-status" style="font-size: 1.2rem; margin-top: 20px;">Awaiting cloud...</div>
+        </div>
+    </div>
+    
+    <div class="map-panel">
+        <div class="panel-header">[ GEOSPATIAL MAP VIEW ]</div>
+        <div id="map"></div>
+    </div>
+
+</div>
+
+<script>
+    // 1. Initialize Interactive Map canvas focused around the region
+    const map = L.map('map').setView([22.804565, 86.202875], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // 2. Open live WebSocket network handshakes
+    const socket = io();
+
+    // 3. Catch automated network event broadcasts
+    socket.on('emergency_dispatch', function(data) {
+        // Play an immediate high-priority alert chime sound
+        let alarm = new Audio('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
+        alarm.play();
+
+        // Swap Visibility States inside Incident Logs Box
+        document.getElementById('awaiting-text').style.display = 'none';
+        document.getElementById('incident-alert').style.display = 'block';
+
+        // Inject data strings safely into DOM strings
+        document.getElementById('lbl-id').innerText = data.vehicle_id;
+        document.getElementById('lbl-speed').innerText = data.speed_kmh;
+        document.getElementById('lbl-coords').innerText = `${parseFloat(data.latitude).toFixed(2)}, ${parseFloat(data.longitude).toFixed(2)}`;
+
+        // Update Bottom Cloud Gateway Box text
+        document.getElementById('cloud-status').innerHTML = `<span style="color: #ff3333; font-weight: bold;">[!] ROUTED VIA PROXY TUNNEL</span><br><span style="color: #00ffcc;">Dispatch: ${data.nearest_hospital} (ETA: ${data.eta_minutes} Mins)</span>`;
+
+        // Clear view tracking arrays and center right onto coordinate point
+        map.setView([data.latitude, data.longitude], 14);
+
+        // Place a clean red pin marker onto map coordinate tracking layer
+        L.marker([data.latitude, data.longitude]).addTo(map)
+            .bindPopup(`<b>CRASH SITE: ${data.vehicle_id}</b><br>Speed: ${data.speed_kmh} km/h`)
+            .openPopup();
+    });
+</script>
+</body>
+</html>
